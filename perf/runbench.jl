@@ -37,7 +37,7 @@ function generate_moi_problem(model, At, b, c;
     else
         for row in 1:rows
             MOI.add_constraint(model, MOI.VectorAffineFunction(
-                [MOI.VectorAffineTerm(1, 
+                [MOI.VectorAffineTerm(1,
                     MOI.ScalarAffineTerm(A_vals[i], x[A_cols[i]])
                 ) for i in nzrange(At, row)], [-b[row]]),
                 MOI.Nonpositives(1))
@@ -113,7 +113,7 @@ function time_build_and_solve(to_build, to_solve, At, b, c, scalar = true)
     end
     MOI.set(to_solve, MOI.TimeLimitSec(), 0.0010)
     @time @timeit "opt" MOI.optimize!(to_solve)
-    val = MOI.get(to_solve, MOI.SolveTime())
+    val = MOI.get(to_solve, MOI.SolveTimeSec())
     println(val)
     @show MOI.get(to_solve, MOI.ObjectiveValue())
     @show MOI.get(to_solve, MOI.TerminationStatus())
@@ -129,19 +129,19 @@ function solve_GLPK(seed, data; time_limit_sec=Inf)
         GC.gc()
         bridged_cache, pure_solver = bridged_cache_and_solver()
         @timeit "bc + s" time_build_and_solve(bridged_cache, pure_solver, At, b, c)
-        
+
         GC.gc()
         cache, pure_solver2 = cache_and_solver()
         @timeit "c + s" time_build_and_solve(cache, pure_solver2, At, b, c)
-        
+
         GC.gc()
         full_solver = bridged_cached_solver()
         @timeit "bcs" time_build_and_solve(full_solver, full_solver, At, b, c)
-        
+
         GC.gc()
         full_solver = bridged_cached_solver()
         @timeit "bcs + v" time_build_and_solve(full_solver, full_solver, At, b, c, false)
-        
+
         GC.gc()
         cache_solver = cached_solver()
         @timeit "cs" time_build_and_solve(cache_solver, cache_solver, At, b, c)

@@ -37,7 +37,7 @@ Throw an error if unsupported constraint or objective types are present in
 `src`.
 """
 function _validate_constraint_types(dest::Optimizer, src::MOI.ModelLike)
-    for (F, S) in MOI.get(src, MOI.ListOfConstraints())
+    for (F, S) in MOI.get(src, MOI.ListOfConstraintTypesPresent())
         if !MOI.supports_constraint(dest, F, S)
             throw(
                 MOI.UnsupportedConstraint{F,S}(
@@ -45,10 +45,21 @@ function _validate_constraint_types(dest::Optimizer, src::MOI.ModelLike)
                 ),
             )
         end
+        for attr in MOI.get(src, MOI.ListOfConstraintAttributesSet{F,S}())
+            if !MOI.supports(dest, attr, MOI.ConstraintIndex{F,S})
+                throw(MOI.UnsupportedAttribute(attr))
+            end
+        end
     end
-    fobj_type = MOI.get(src, MOI.ObjectiveFunctionType())
-    if !MOI.supports(dest, MOI.ObjectiveFunction{fobj_type}())
-        throw(MOI.UnsupportedAttribute(MOI.ObjectiveFunction(fobj_type)))
+    for attr in MOI.get(src, MOI.ListOfModelAttributesSet())
+        if !MOI.supports(dest, attr)
+            throw(MOI.UnsupportedAttribute(attr))
+        end
+    end
+    for attr in MOI.get(src, MOI.ListOfVariableAttributesSet())
+        if !MOI.supports(dest, attr, MOI.VariableIndex)
+            throw(MOI.UnsupportedAttribute(attr))
+        end
     end
     return
 end
@@ -122,7 +133,7 @@ function _extract_row_data(src, map, cache, ::Type{S}) where {S}
         for term in f.terms
             nnz += 1
             cache.I[nnz] = row
-            cache.J[nnz] = Cint(map[term.variable_index].value::Int64)
+            cache.J[nnz] = Cint(map[term.variable].value::Int64)
             cache.V[nnz] = term.coefficient
         end
         map[ci] = MOI.ConstraintIndex{MOI.ScalarAffineFunction{Float64},S}(row)
@@ -137,9 +148,9 @@ function _add_all_variables(model::Optimizer, cache::_OptimizerCache)
     sizehint!(model.variable_info, N)
     for i in 1:N
         bound = get_moi_bound_type(cache.cl[i], cache.cu[i], cache.bounds[i])
-        index = CleverDicts.add_item(
+        CleverDicts.add_item(
             model.variable_info,
-            VariableInfo(MOI.VariableIndex(i), i, bound, cache.types[i]),
+            VariableInfo(MOI.VariableIndex(i), i, bound, cache.types[i], ""),
         )
         glp_bound_type = get_glp_bound_type(cache.cl[i], cache.cu[i])
         glp_set_col_bnds(model, i, glp_bound_type, cache.cl[i], cache.cu[i])
@@ -223,7 +234,7 @@ function MOI.copy_to(
     # Copy model attributes:
     MOIU.pass_attributes(dest, src, copy_names, map)
     MOIU.pass_attributes(dest, src, copy_names, map, variables)
-    for (F, S) in MOI.get(src, MOI.ListOfConstraints())
+    for (F, S) in MOI.get(src, MOI.ListOfConstraintTypesPresent())
         indices = MOI.get(src, MOI.ListOfConstraintIndices{F,S}())
         # TODO(odow): fix copy_names = false.
         MOIU.pass_attributes(dest, src, false, map, indices)

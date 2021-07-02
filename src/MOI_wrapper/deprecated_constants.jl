@@ -13,7 +13,7 @@ end
 
 function MOI.set(
     model::Optimizer,
-    param::MOI.RawParameter,
+    param::MOI.RawOptimizerAttribute,
     value::DeprecatedConstant,
 )
     @warn(
